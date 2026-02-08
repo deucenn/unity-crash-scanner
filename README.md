@@ -12,14 +12,10 @@ Script to scan Unity log files for crash information
    - open a terminal in the project directory.
    - run:
      ```sh
-     gcc main.c -o main
+     gcc main.c -o crash_scanner -lshlwapi -lshell32
      ```
 2. run the scanner:
-   - provide the path to a Unity log file as an argument:
-     ```sh
-     ./main <path_to_unity_log>
-     ```
    - example:
      ```sh
-     ./main UnityPlayer.log
+     ./crash_scanner 
      ```

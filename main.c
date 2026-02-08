@@ -1,65 +1,103 @@
 // unity crash log scanner
 // by deuce
-// v0.1
+// v0.2
 
-#include <stdio.h>
 #include <windows.h>
-#include <shlobj.h> 
+#include <tlhelp32.h>
+#include <shlobj.h>
+#include <stdio.h>
 
 #define MAX_PATH_LEN 1024
+#define LOG_LINES_TO_READ 15
 
-void monitor_logs(const char* logPath) {
-    printf("Monitoring: %s\n", logPath);
-    printf("Searching for 'Error', 'Exception', and 'Crash'...\n\n");
+// process id localization logic
+DWORD GetPIDByName(const char* processName) 
+{
+    DWORD pid = 0;
+    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    PROCESSENTRY32 entry;
+    entry.dwSize = sizeof(PROCESSENTRY32);
 
-    HANDLE hFile = CreateFileA(logPath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, 
-                               NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (Process32First(snapshot, &entry)) 
+    {
+        do 
+        {
+            if (_stricmp(entry.szExeFile, processName) == 0) 
+            {
+                pid = entry.th32ProcessID;
+                break;
+            }
+        } while (Process32Next(snapshot, &entry));
+    }
+    CloseHandle(snapshot);
+    return pid;
+}
 
-    if (hFile == INVALID_HANDLE_VALUE) {
-        printf("Error: Could not open log file. (Code: %lu)\n", GetLastError());
+void DumpFinalLogs(const char* logPath) 
+{
+    printf("\n--- EXTRACTING FINAL LOG ENTRIES ---\n");
+    FILE* file = fopen(logPath, "r");
+    if (!file) 
+    {
+        printf("Could not open log for final dump.\n");
         return;
     }
 
-    SetFilePointer(hFile, 0, NULL, FILE_END);
+    fseek(file, 0, SEEK_END);
+    long fileSize = ftell(file);
+    long readPos = fileSize > 2000 ? fileSize - 2000 : 0; // look at last 2kb
+    fseek(file, readPos, SEEK_SET);
 
-    char buffer[4096];
-    DWORD bytesRead;
-
-    while (1) {
-        if (ReadFile(hFile, buffer, sizeof(buffer) - 1, &bytesRead, NULL) && bytesRead > 0) {
-            buffer[bytesRead] = '\0';
-            
-            if (strstr(buffer, "Exception") || strstr(buffer, "Error") || strstr(buffer, "Crash")) {
-                printf("[!] POTENTIAL ISSUE DETECTED:\n%s\n", buffer);
-            }
-        }
-        Sleep(500); 
+    char line[512];
+    while (fgets(line, sizeof(line), file)) 
+    {
+        printf("  > %s", line);
     }
-
-    CloseHandle(hFile);
+    fclose(file);
 }
 
-int main() {
+int main() 
+{
+    const char* gameExe = "Skate Style.exe"; 
     char logPath[MAX_PATH_LEN];
     char appDataPath[MAX_PATH_LEN];
 
-    // Path to local app data with SHGetFolder
-    if (SHGetFolderPathA(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, appDataPath) != S_OK) {
-        printf("Failed to find AppData path.\n");
-        return 1;
-    }
-
-
+    // automatic LocalLow localization in AppData
+    SHGetFolderPathA(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, appDataPath);
     snprintf(logPath, MAX_PATH_LEN, "%sLow\\Zellah Games\\Skate Style\\Player.log", appDataPath);
 
-    DWORD dwAttrib = GetFileAttributesA(logPath);
-    if (dwAttrib == INVALID_FILE_ATTRIBUTES) {
-        printf("Log file not found at: %s\n", logPath);
-        printf("Please ensure the game has been run at least once.\n");
-        return 1;
+    printf("Waiting for %s to start...\n", gameExe);
+    DWORD pid = 0;
+    while ((pid = GetPIDByName(gameExe)) == 0) Sleep(1000);
+
+    printf("Target Found (PID: %lu). Monitoring...\n", pid);
+
+    HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | SYNCHRONIZE, FALSE, pid);
+    DWORD exitCode = 0;
+
+    while (1) 
+    {
+        if (GetExitCodeProcess(hProcess, &exitCode) && exitCode != STILL_ACTIVE) 
+        {
+            printf("\n======================================\n");
+            printf("GAME TERMINATED\n");
+            printf("Exit Code: 0x%08X\n", exitCode);
+
+            if (exitCode != 0) 
+            {
+                printf("CRASH DETECTED! Analyzing log...\n");
+                DumpFinalLogs(logPath);
+            } else 
+            {
+                printf("Game closed normally.\n");
+            }
+            break;
+        }
+        Sleep(1000);
     }
 
-    monitor_logs(logPath);
-
+    CloseHandle(hProcess);
+    printf("\nPress Enter to exit scanner.");
+    getchar();
     return 0;
 }
