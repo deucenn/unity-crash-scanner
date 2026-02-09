@@ -1,6 +1,6 @@
 // unity crash log scanner
 // by deuce
-// v0.2
+// v0.4
 
 #include <windows.h>
 #include <tlhelp32.h>
