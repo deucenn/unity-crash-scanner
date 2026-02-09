@@ -19,3 +19,6 @@ Script to scan Unity log files for crash information
      ```sh
      ./crash_scanner 
      ```
+3. open the game
+
+4. after you closed your game or it crashed you can see a more detailed overview in the program window

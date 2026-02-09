@@ -74,8 +74,7 @@ void PerformDeepAnalysis(const char* logPath, DWORD exitCode)
     char line[1024];
     int foundHint = 0;
     
-    int hintTriggered[100] = 
-    {0}; 
+    int hintTriggered[100] = {0}; 
 
     while (fgets(line, sizeof(line), file)) 
     {
@@ -83,7 +82,7 @@ void PerformDeepAnalysis(const char* logPath, DWORD exitCode)
         {
             if (strstr(line, hints[i].keyword) && !hintTriggered[i]) 
             {
-                printf("[!] LOG ANALYSIS: %s\n", hints[i].explanation);
+                printf("[!] LOG ANALYSIS: %s -- %s\n", hints[i].keyword, hints[i].explanation);
                 hintTriggered[i] = 1; 
                 foundHint = 1;
             }
